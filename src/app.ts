@@ -14,22 +14,17 @@ declare module "fastify" {
 const App = (options: FastifyServerOptions) => {
 	const app = fastify(options)
 
-	app.register(require('@fastify/cors'), (instance) => {
-		return (req:any, callback:any) => {
-		  const corsOptions = {
+	app.register(require('@fastify/cors'), {
+		origin: (origin: string | undefined, callback: (err: Error | null, allow: boolean) => void) => {
 			// This is NOT recommended for production as it enables reflection exploits
-			origin: true
-		  };
-	  
-		  // do not include CORS headers for requests from localhost
-		  if (/^localhost$/m.test(req.headers.origin)) {
-			corsOptions.origin = false
-		  }
-	  
-		  // callback expects two parameters: error and options
-		  callback(null, corsOptions)
+			// do not include CORS headers for requests from localhost
+			if (origin && /^localhost$/m.test(origin)) {
+				callback(null, false);
+			} else {
+				callback(null, true);
+			}
 		}
-	  })
+	})
 
 	// swagger api documentation
 	app.register(fastifySwagger, swaggerOption.options);
@@ -40,7 +35,11 @@ const App = (options: FastifyServerOptions) => {
 	app.register(articleRouter, { prefix: "/api/articles" });
 
 	app.setErrorHandler((error, request, reply) => {
-		const customError: CustomError = error;
+		const customError = error instanceof CustomError ? error : new CustomError(
+			error instanceof Error ? error.message : 'Internal Server Error',
+			undefined,
+			500
+		);
 		reply.status(customError.statusCode || 500).send({
 			error: {
 				message: customError.message,
